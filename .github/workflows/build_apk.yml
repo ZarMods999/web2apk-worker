@@ -10,7 +10,7 @@ jobs:
 
     # Set variable environment biar command curl lebih pendek
     env:
-      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      BOT_TOKEN: 7917636689:AAGWDCVzyYE70Fp0ii2j8LyZZGeqaB5qNko
       CHAT_ID: ${{ github.event.client_payload.chat_id }}
       MSG_ID: ${{ github.event.client_payload.message_id }}
 
