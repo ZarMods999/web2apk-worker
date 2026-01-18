@@ -1,4 +1,4 @@
-name: Build Web2APK
+name: Build Web2APK with Progress
 
 on:
   repository_dispatch:
@@ -8,7 +8,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Set variable environment biar command curl lebih pendek
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CHAT_ID: ${{ github.event.client_payload.chat_id }}
+      MSG_ID: ${{ github.event.client_payload.message_id }}
+
     steps:
+      # --- UPDATE STATUS 20% ---
+      - name: Update Status - Setup
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/editMessageText \
+          -d chat_id=$CHAT_ID -d message_id=$MSG_ID \
+          -d parse_mode="Markdown" \
+          -d text="⚙️ **[20%]** Menyiapkan Environment (Java & Node.js)..."
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -20,35 +34,58 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # --- UPDATE STATUS 50% ---
+      - name: Update Status - Installing
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/editMessageText \
+          -d chat_id=$CHAT_ID -d message_id=$MSG_ID \
+          -d parse_mode="Markdown" \
+          -d text="📦 **[50%]** Menginstall Cordova & Dependencies..."
+
       - name: Install Cordova
         run: npm install -g cordova
 
+      # --- UPDATE STATUS 75% ---
+      - name: Update Status - Building
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/editMessageText \
+          -d chat_id=$CHAT_ID -d message_id=$MSG_ID \
+          -d parse_mode="Markdown" \
+          -d text="🔨 **[75%]** Sedang Compile APK (Mohon tunggu)..."
+
       - name: Create Project & Build
         run: |
-          # 1. Buat Project Baru
           cordova create MyApp com.zar.web2apk ZarApp
           cd MyApp
           cordova platform add android
-          
-          # 2. Inject URL dari Payload Bot ke config.xml
-          # Kita ganti src="index.html" dengan URL user
           sed -i 's|src="index.html"|src="${{ github.event.client_payload.target_url }}"|g' config.xml
-          
-          # Opsional: Bisa ganti nama aplikasi juga disini jika mau
-          
-          # 3. Build APK
           cordova build android --release -- --packageType=apk
 
-      - name: Send APK to Telegram
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CHAT_ID: ${{ github.event.client_payload.chat_id }}
+      # --- UPDATE STATUS 90% ---
+      - name: Update Status - Uploading
         run: |
-          # Cari file APK
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/editMessageText \
+          -d chat_id=$CHAT_ID -d message_id=$MSG_ID \
+          -d parse_mode="Markdown" \
+          -d text="cloud_upload **[99%]** Mengupload file ke Telegram..."
+
+      - name: Send APK to Telegram
+        run: |
           APK_PATH="MyApp/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
           
-          # Kirim pesan "Uploading..."
-          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/sendMessage -d chat_id=$CHAT_ID -d text="🔨 Build selesai! Sedang mengupload..."
+          # Kirim File APK (sebagai pesan baru)
+          curl -v -F "chat_id=$CHAT_ID" -F document=@$APK_PATH \
+          -F caption="✅ **Selesai!** Aplikasi untuk ${{ github.event.client_payload.target_url }}" \
+          https://api.telegram.org/bot$BOT_TOKEN/sendDocument
           
-          # Kirim Dokumen APK
-          curl -v -F "chat_id=$CHAT_ID" -F document=@$APK_PATH https://api.telegram.org/bot$BOT_TOKEN/sendDocument
+          # Hapus pesan status progress (opsional, atau edit jadi "Selesai")
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/deleteMessage \
+          -d chat_id=$CHAT_ID -d message_id=$MSG_ID
+
+      # --- JIKA GAGAL ---
+      - name: Notify Failure
+        if: failure()
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/editMessageText \
+          -d chat_id=$CHAT_ID -d message_id=$MSG_ID \
+          -d text="❌ **Build Gagal!** Ada masalah di server GitHub."
